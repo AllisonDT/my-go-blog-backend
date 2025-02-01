@@ -1,6 +1,6 @@
 module github.com/AllisonDT/my-go-blog-backend
 
-go 1.23.5
+go 1.23.4
 
 require (
 	github.com/golang/snappy v0.0.4 // indirect
