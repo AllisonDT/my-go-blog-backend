@@ -1,6 +1,6 @@
 module github.com/AllisonDT/my-go-blog-backend
 
-go 1.23.4
+go 1.23
 
 require (
 	github.com/felixge/httpsnoop v1.0.3 // indirect
