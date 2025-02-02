@@ -1,30 +1,21 @@
+// main.go
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
-	"github.com/gorilla/handlers"  // Import the handlers package for CORS support
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Post represents a blog post.
-type Post struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Title     string             `bson:"title" json:"title"`
-	Content   string             `bson:"content" json:"content"`
-	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
-}
-
+// client is the MongoDB client used across the project.
 var client *mongo.Client
 
 func main() {
@@ -52,14 +43,19 @@ func main() {
 	// Set up router.
 	router := mux.NewRouter()
 
-	// Basic home route.
-	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, world! This is my Go blog API."))
-	}).Methods("GET")
+	// Home route.
+	router.HandleFunc("/", homeHandler).Methods("GET")
 
-	// Routes for posts.
-	router.HandleFunc("/posts", createPost).Methods("POST")
+	// Admin login route.
+	router.HandleFunc("/admin/login", adminLogin).Methods("POST")
+
+	// Protected route for creating posts.
+	router.Handle("/posts", requireAuth(http.HandlerFunc(createPost))).Methods("POST")
+	// Public route to get posts.
 	router.HandleFunc("/posts", getPosts).Methods("GET")
+
+	// Public route for adding comments.
+	router.HandleFunc("/posts/{id}/comments", createComment).Methods("POST")
 
 	// Get port from environment or default to 8080.
 	port := os.Getenv("PORT")
@@ -69,7 +65,7 @@ func main() {
 
 	// Set up CORS middleware.
 	corsHandler := handlers.CORS(
-		handlers.AllowedOrigins([]string{"*"}), // Allow all origins; adjust for production
+		handlers.AllowedOrigins([]string{"*"}), // Allow all origins (adjust for production)
 		handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS"}),
 		handlers.AllowedHeaders([]string{"Content-Type", "Authorization"}),
 	)
@@ -78,53 +74,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(":"+port, corsHandler(router)))
 }
 
-// createPost handles POST requests to add a new blog post.
-func createPost(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	var post Post
-
-	// Decode request body into post struct.
-	if err := json.NewDecoder(r.Body).Decode(&post); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	post.CreatedAt = time.Now()
-
-	collection := client.Database("my-blog").Collection("posts")
-	result, err := collection.InsertOne(context.Background(), post)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// Set the ID of the post and return it.
-	post.ID = result.InsertedID.(primitive.ObjectID)
-	json.NewEncoder(w).Encode(post)
-}
-
-// getPosts handles GET requests to retrieve all blog posts.
-func getPosts(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	var posts []Post
-
-	collection := client.Database("my-blog").Collection("posts")
-	cursor, err := collection.Find(context.Background(), bson.M{})
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer cursor.Close(context.Background())
-
-	// Iterate through the cursor and decode each post.
-	for cursor.Next(context.Background()) {
-		var post Post
-		if err := cursor.Decode(&post); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		posts = append(posts, post)
-	}
-
-	json.NewEncoder(w).Encode(posts)
+// homeHandler responds to the base URL.
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Hello, world! This is my advanced Go blog API."))
 }
